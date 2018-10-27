@@ -5,45 +5,34 @@ from telegram.ext import Updater, MessageHandler, CommandHandler, Filters
 token = config('TOKEN')
 updater = Updater(token=token)
 dispatcher = updater.dispatcher
-repos_api = requests.get("https://api.github.com/orgs/JBossOutreach/repos")
-repos_data = {repo["name"]: repo for repo in repos_api.json()}
+STARGAZERS_URL = "https://api.github.com/repos/%s/stargazers"
 
 
 def get_stats(bot, update):
     repo = update.message.text
+    repo_stargazers = requests.get(STARGAZERS_URL % repo).json()
+    if type(repo_stargazers) != list:
+        return
+    msg = ""
 
-    if repo.strip() in repos_data.keys():
-        repo_data = repos_data[repo]
-        url = repo_data["html_url"]
-        description = repo_data["description"]
-        stars = repo_data["stargazers_count"]
-        forks = repo_data["forks"]
-        watches = repo_data["watchers"]
-        issues = repo_data["open_issues"]
-        license_name = repo_data["license"]
-        if license_name:
-            license_name = license_name["name"]
-        else:
-            license_name = "Other"
-        created_at = repo_data["created_at"].replace('T', ' ').replace('Z', '')
+    if len(repo_stargazers) > 0:
+        msg = ("Users who starred this repo:\n" +
+               "\n".join(user["html_url"] for user in repo_stargazers))
+    elif len(repo_stargazers) == 0:
+        msg = "No one starred the repo 🙁"
 
-        stats = ("%s\nℹ️ %s\n"
-                 "⭐ %i | 🔱 %i | 👁 %i | ❗️ %i\n"
-                 "⚖️ %s\n📆 %s") % (
-                    url, description,
-                    stars, forks, watches, issues,
-                    license_name, created_at
-                )
-        update.message.reply_text(stats)
+    update.message.reply_text(msg)
 
 
-def get_repos(bot, update):
-    update.message.reply_text("Available repos:\n" +
-                              "\n".join(repos_data.keys()))
+def get_help(bot, update):
+    update.message.reply_text("To get info about repository watchers "
+                              "send the name of github repository like this - "
+                              "*owner name*/*repo name*.\n"
+                              "Try to send: \"JBossOutreach/jboss-logo\"")
 
 
 dispatcher.add_handler(MessageHandler(Filters.text, get_stats))
-dispatcher.add_handler(CommandHandler('list', get_repos))
+dispatcher.add_handler(CommandHandler("help", get_help))
 
 updater.start_polling()
 updater.idle()
